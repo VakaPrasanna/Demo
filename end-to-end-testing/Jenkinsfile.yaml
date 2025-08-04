@@ -1,0 +1,75 @@
+name: CI/CD Pipeline
+'on':
+  workflow_dispatch:
+    inputs:
+      DEPLOY_ENV:
+        description: Choose environment to deploy
+        type: choice
+        options:
+        - dev
+        - staging
+        - prod
+  schedule:
+  - cron: 'H 2 * * 1-5 '
+  push:
+    branches:
+    - development
+    - main
+jobs:
+  Checkout:
+    if: github.ref == 'refs/heads/development'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      run: ''
+  build:
+    runs-on: ubntu-latest
+    steps:
+    - name: Build
+      run: '#!/bin/bash; ./gradlew clean build'
+  sonarqubeAnalysis:
+    runs-on: ubntu-latest
+    steps:
+    - name: SonarQube Analysis
+      run: '#!/bin/bash; ./gradlew sonarqube'
+  test&Report:
+    runs-on: ubntu-latest
+    steps:
+    - name: Test & Report
+      run: '#!/bin/bash; ./gradlew test'
+  approval:
+    runs-on: ubuntu-latest
+    needs: build
+    environment: production
+    steps:
+    - name: Await Manual Approval
+      run: echo "Approval required. Approve this job to continue."
+  uploadArtifact:
+    runs-on: ubntu-latest
+    steps:
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: my_artifact
+        path: build/libs/app-artifact.jar
+  syncToS3:
+    runs-on: ubntu-latest
+    steps:
+    - name: Sync to S3
+      run: '#!/bin/bash; aws s3 cp build/libs/app-artifact.jar s3://your-bucket-name/path/
+        --region us-east-1'
+  setUpSsh:
+    runs-on: ubntu-latest
+    steps:
+    - name: Set up SSH
+      uses: webfactory/ssh-agent@v0.5.3
+      with:
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+  createGithubRelease:
+    runs-on: ubntu-latest
+    steps:
+    - name: Create GitHub Release
+      run: "#!/bin/bash; curl -X POST -H \"Authorization: token ${GITHUB_TOKEN}\"\
+        \ \\\n                        -d '{ \"tag_name\": \"${version}\", \"name\"\
+        : \"Release ${version}\", \"body\": \"Automated release from Jenkins\", \"\
+        draft\": false, \"pr>\n                        https://api.github.com/repos/your-org/your-repo/releases"

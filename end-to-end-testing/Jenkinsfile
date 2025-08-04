@@ -1,0 +1,91 @@
+pipeline {
+    agent any
+ 
+    triggers {
+        cron('H 2 * * 1-5') // Run at 2AM Mon-Fri
+    }
+ 
+    parameters {
+        choice(name: 'DEPLOY_ENV', choices: ['dev', 'staging', 'prod'], description: 'Choose environment to deploy')
+    }
+ 
+    stages {
+ 
+        stage('Checkout') {
+            when {
+                branch 'development'
+            }
+            steps {
+                checkout scm
+            }
+        }
+ 
+        stage('Build') {
+            steps {
+                script {
+                    echo "Running build..."
+                    sh './gradlew clean build'
+                }
+            }
+        }
+ 
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('MySonarQubeServer') {
+                    sh './gradlew sonarqube'
+                }
+            }
+        }
+ 
+        stage('Test & Report') {
+            steps {
+                sh './gradlew test'
+                junit 'build/test-results/test/*.xml'
+            }
+        }
+ 
+        stage('Manual Approval') {
+            steps {
+                input message: "Deploy to ${params.DEPLOY_ENV}?", ok: 'Yes, continue'
+            }
+        }
+ 
+        stage('Archive Artifacts') {
+            steps {
+                archiveArtifacts artifacts: "build/libs/app-artifact.jar", fingerprint: true
+            }
+        }
+ 
+        stage('Sync to S3') {
+            steps {
+                // Make sure your Jenkins agent has AWS CLI configured via IAM role or environment
+                sh '''
+                    aws s3 cp build/libs/app-artifact.jar s3://your-bucket-name/path/ --region us-east-1
+                '''
+            }
+        }
+ 
+        stage('SSH Deployment') {
+            steps {
+                sshagent (credentials: ['ssh-credential-id']) {
+                    sh '''
+                        ssh -o StrictHostKeyChecking=no user@remote.server 'bash deploy.sh'
+                    '''
+                }
+            }
+        }
+ 
+        stage('Create GitHub Release') {
+            steps {
+                script {
+                    def version = sh(script: "./gradlew -q printVersion", returnStdout: true).trim()
+                    sh """
+                        curl -X POST -H "Authorization: token ${GITHUB_TOKEN}" \
+                        -d '{ "tag_name": "${version}", "name": "Release ${version}", "body": "Automated release from Jenkins", "draft": false, "pr>
+                        https://api.github.com/repos/your-org/your-repo/releases
+                    """
+                }
+            }
+        }
+    }
+}
