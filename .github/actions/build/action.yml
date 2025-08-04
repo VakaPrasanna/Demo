@@ -1,0 +1,17 @@
+name: build
+description: Build step converted from Jenkins
+inputs:
+  DEPLOY_ENV:
+    description: Environment to deploy
+    required: false
+runs:
+  using: composite
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Build with Gradle
+      run: |
+        #!/bin/bash
+        echo "Running build..."
+        ./gradlew clean build
