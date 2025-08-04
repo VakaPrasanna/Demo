@@ -1,0 +1,14 @@
+name: test
+description: Test & report step
+inputs: {}
+runs:
+  using: composite
+  steps:
+    - name: Run tests
+      run: |
+        #!/bin/bash
+        ./gradlew test
+
+    - name: Publish test results
+      run: |
+        echo "Would upload or process test results here."
