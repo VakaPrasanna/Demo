@@ -1,0 +1,35 @@
+name: deploy
+description: Deploy step with approval and release
+inputs:
+  DEPLOY_ENV:
+    description: Environment to deploy
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Await manual approval
+      run: |
+        echo "Manual approval placeholder. Real approval enforced via GitHub environment protection."
+
+    - name: Sync to S3
+      run: |
+        #!/bin/bash
+        aws s3 cp build/libs/app-artifact.jar s3://your-bucket-name/path/ --region us-east-1
+
+    - name: Set up SSH
+      uses: webfactory/ssh-agent@v0.5.3
+      with:
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+    - name: Run remote deploy script
+      run: |
+        #!/bin/bash
+        ssh -o StrictHostKeyChecking=no user@remote.server 'bash deploy.sh'
+
+    - name: Create GitHub Release
+      run: |
+        #!/bin/bash
+        version=$(./gradlew -q printVersion)
+        curl -X POST -H "Authorization: token ${GITHUB_TOKEN}" \
+          -d "{ \"tag_name\": \"${version}\", \"name\": \"Release ${version}\", \"body\": \"Automated release from Jenkins\", \"draft\": false }" \
+          https://api.github.com/repos/your-org/your-repo/releases
