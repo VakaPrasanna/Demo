@@ -1,90 +1,82 @@
+import os
 import yaml
 
-class NoQuoteDumper(yaml.Dumper):
-    def increase_indent(self, flow=False, indentless=False):
-        return super(NoQuoteDumper, self).increase_indent(flow, indentless)
 
-class GithubActionsManager:
-    def __init__(self, result_dict,parameters,triggers,file):
-        """
-        Initialize the github_actions.yml file with the given base structure.
-        """
-        #self.file_path = ".github/workflows/github_actions.yml"
-        self.file_path = str(file)+'.yaml'
-        print(file)
-        triggers=triggers+' '
-        print(type(triggers))
-        # print(len(triggers))
-        triggers=f"'{triggers}'"
-        print("Cron value",triggers)
-        triggers=triggers[1:-1]
-
-
-        self.base_structure = {
-            "name": "CI/CD Pipeline",
-            "on": {
-                # "push": {
-                #     "branches": [result_dict["branch"]]
-                # }
-            },
-            "jobs": {}
+def create_github_workflow(stages, workflow_name="converted_workflow", schedule=None, parameters=None):
+    workflow = {
+        "name": workflow_name,
+        "on": {},
+        "jobs": {
+            "run-pipeline": {
+                "runs-on": "ubuntu-latest",
+                "steps": []
+            }
         }
-        if parameters:
-            self.base_structure["on"]["workflow_dispatch"] = parameters
+    }
 
-        else:
-            print("from githubactionmanger ",result_dict)
-            self.base_structure["on"]["push"] = {"branches":"main"}
-        if len(triggers)>2:
-            self.base_structure["on"]["schedule"] = [{"cron": triggers}]
-        # Write the base structure to the file
-        self._write_to_file(self.base_structure)
+    if schedule:
+        workflow["on"]["schedule"] = [{"cron": schedule}]
+    else:
+        workflow["on"]["workflow_dispatch"] = {}
+
+    if parameters:
+        workflow["on"]["workflow_dispatch"] = {
+            "inputs": {
+                param["name"]: {
+                    "description": param["description"],
+                    "required": True,
+                    "default": param["default"]
+                }
+                for param in parameters
+            }
+        }
+
+    for stage in stages:
+        action_name = stage["name"].replace(" ", "_").lower()
+        action_path = f"./actions/{action_name}"
+        workflow["jobs"]["run-pipeline"]["steps"].append({
+            "name": f"Run {stage['name']}",
+            "uses": f"{action_path}",
+            "with": {
+                "env": "${{ github.event.inputs.DEPLOY_ENV || 'dev' }}" if parameters else ""
+            }
+        })
+
+    os.makedirs(".github/workflows", exist_ok=True)
+    with open(f".github/workflows/{workflow_name}.yml", "w") as f:
+        yaml.dump(workflow, f, default_flow_style=False)
+
+    print(f"✅ Workflow created at .github/workflows/{workflow_name}.yml")
 
 
-    def _write_to_file(self, content):
-        """
-        Write the YAML content to the github_actions.yml file.
-        """
-        with open(self.file_path, "w") as file:
-            yaml.safe_dump(content, file, default_style=None, sort_keys=False, default_flow_style=False)
+def create_composite_action(stage_name, commands):
+    action_dir = f"actions/{stage_name.replace(' ', '_').lower()}"
+    os.makedirs(action_dir, exist_ok=True)
 
-    def _read_from_file(self):
-        """
-        Read the current YAML content from the file.
-        """
-        with open(self.file_path, "r") as file:
-            return yaml.safe_load(file)
+    action_yml = {
+        "name": stage_name,
+        "description": f"Composite action for stage {stage_name}",
+        "inputs": {
+            "env": {
+                "description": "Deployment environment",
+                "required": False,
+                "default": "dev"
+            }
+        },
+        "runs": {
+            "using": "composite",
+            "steps": []
+        }
+    }
 
-    def append_to_file(self, step_content):
-        """
-        Append a new step to the build job in the github_actions.yml file.
-        """
-        #import pdb;pdb.set_trace()
-        current_content = self._read_from_file()
-        camel_case = lambda s: ''.join(word.capitalize() if i else word.lower() for i,word in enumerate(s.split()))
-        name = camel_case(step_content["name"])
-           
-   
-        if step_content.get('if'):
-                    arllist= step_content.get("branchesAll")[1:]
-                    arllist.append("main")
-                    current_content["on"]["push"] = "hellp"
-                    current_content["on"]["push"] = {"branches":arllist} 
-                    val_if = step_content['if']
-                    step_content.pop('if')
-                    step_content.pop('branchesAll')
-                    current_content["jobs"][step_content["name"]]={'if':val_if,"runs-on": "ubuntu-latest","steps":[step_content]}
-        else:
-            current_content["jobs"][name] = {'runs-on': 'ubntu-latest',
-            "steps":[
-                step_content,
-                ]}
-        self._write_to_file(current_content)
+    for command in commands:
+        action_yml["runs"]["steps"].append({
+            "name": f"Run command",
+            "shell": "bash",
+            "run": command
+        })
 
-    def append_to_job(self, key, content):
-        """
-        Append a new job to the github_actions.yml file.
-        """
-        current_content = self._read_from_file()
-        current_content["jobs"][key] = content
-        self._write_to_file(current_content)
+    with open(os.path.join(action_dir, "action.yml"), "w") as f:
+        yaml.dump(action_yml, f, default_flow_style=False)
+
+    print(f"✅ Composite action created at {action_dir}/action.yml")
