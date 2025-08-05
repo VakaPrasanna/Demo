@@ -1,8 +1,7 @@
 import os
 import yaml
 
-
-def create_github_workflow(stages, workflow_name="converted_workflow", schedule=None, parameters=None):
+def create_github_workflow(stages, workflow_name="converted_workflow", schedule=None, parameters=None, shared_libraries=None):
     workflow = {
         "name": workflow_name,
         "on": {},
@@ -31,6 +30,17 @@ def create_github_workflow(stages, workflow_name="converted_workflow", schedule=
             }
         }
 
+    if shared_libraries:
+        for lib in shared_libraries:
+            workflow["jobs"]["run-pipeline"]["steps"].append({
+                "name": f"Checkout shared library {lib}",
+                "uses": "actions/checkout@v4",
+                "with": {
+                    "repository": lib,
+                    "path": f"shared-libs/{lib.split('/')[-1]}"
+                }
+            })
+
     for stage in stages:
         action_name = stage["name"].replace(" ", "_").lower()
         action_path = f"./actions/{action_name}"
@@ -46,7 +56,7 @@ def create_github_workflow(stages, workflow_name="converted_workflow", schedule=
     with open(f".github/workflows/{workflow_name}.yml", "w") as f:
         yaml.dump(workflow, f, default_flow_style=False)
 
-    print(f"✅ Workflow created at .github/workflows/{workflow_name}.yml")
+    print(f"Workflow created at .github/workflows/{workflow_name}.yml")
 
 
 def create_composite_action(stage_name, commands):
@@ -79,4 +89,4 @@ def create_composite_action(stage_name, commands):
     with open(os.path.join(action_dir, "action.yml"), "w") as f:
         yaml.dump(action_yml, f, default_flow_style=False)
 
-    print(f"✅ Composite action created at {action_dir}/action.yml")
+    print(f"Composite action created at {action_dir}/action.yml")
