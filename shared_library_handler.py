@@ -82,3 +82,9 @@ def library_snippet_generator(library_name, function_name):
         return None
 
     return snippet
+
+def extract_shared_libraries(jenkinsfile_text):
+    shared_libs=[]
+    if "@Library" in jenkinsfile_text:
+        shared_libs.append("example-shared-library")
+    return shared_libs
