@@ -41,20 +41,26 @@ jobs:
           echo "Conversion step - implement parser invocation."
 
   build:
-    name: Build ✓
+    name: Build 
     runs-on: ubuntu-latest
     needs: convert
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        
       - name: Run build composite action
         uses: ./.github/actions/build
         with:
           DEPLOY_ENV: ${{ needs.convert.outputs.deploy_env }}
 
   test:
-    name: Test ✓
+    name: Test 
     runs-on: ubuntu-latest
     needs: build
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        
       - name: Run test composite action
         uses: ./.github/actions/test
 
@@ -63,6 +69,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        
       - name: Run deploy composite action
         uses: ./.github/actions/deploy
         with:
