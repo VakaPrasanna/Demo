@@ -38,7 +38,7 @@ def extract_parameters(jenkinsfile_path):
     parameters = []
     choice_matches = re.findall(r'choice\(.*?name:\s*["\'](.*?)["\'].*?choices:\s*\[(.*?)\]', content, re.DOTALL)
     for name, choices_str in choice_matches:
-        choices = [c.strip(" '\") for c in choices_str.strip().split(',') if c.strip()]
+        choices = [c.strip(" '") for c in choices_str.strip().split(',') if c.strip()]
         parameters.append({"name": name, "choices": choices})
     return parameters
 
