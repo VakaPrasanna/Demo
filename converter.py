@@ -1,6 +1,7 @@
 import os
 import re
 from github_actions_manager import create_composite_action, create_workflow_yaml
+from shared_library_handler import extract_shared_libraries
 
 # Util to extract stages and their shell commands from a Jenkinsfile
 def parse_jenkinsfile(jenkinsfile_path):
