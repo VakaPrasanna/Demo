@@ -15,3 +15,4 @@ runs:
         #!/bin/bash
         echo "Running build..."
         ./gradlew clean build
+      shell: bash
