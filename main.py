@@ -1,49 +1,45 @@
 import os
-import argparse
-
-from converter import parse_jenkinsfile
+from converter import convert_jenkinsfile_to_stages
+from shared_library_handler import extract_shared_libraries
 from github_actions_manager import create_github_workflow, create_composite_action
 
 
 def process_jenkinsfile(jenkinsfile_path):
-    print(f"📄 Processing Jenkinsfile: {jenkinsfile_path}")
-    parsed_data = parse_jenkinsfile(jenkinsfile_path)
-    if not parsed_data:
-        print("❌ Failed to parse Jenkinsfile.")
-        return
+    with open(jenkinsfile_path, "r") as f:
+        jenkinsfile_text = f.read()
 
-    parameters = parsed_data.get("parameters", [])
-    triggers = parsed_data.get("triggers", [])
-    stages = parsed_data.get("stages", [])
+    print(f"🔎 Processing {jenkinsfile_path}...")
 
-    cron = None
-    if triggers:
-        for trigger in triggers:
-            if "cron" in trigger:
-                cron = trigger.split("cron('")[-1].rstrip("')")
+    # Convert Jenkinsfile text into pipeline metadata
+    result = convert_jenkinsfile_to_stages(jenkinsfile_text)
 
-    # Create composite actions for each stage
+    # Extract shared libraries (even if empty)
+    shared_libs = extract_shared_libraries(jenkinsfile_text)
+    result['shared_libraries'] = shared_libs
+    if shared_libs:
+        print(f"📦 Found shared libraries: {shared_libs}")
+
+    stages = result["stages"]
+    parameters = result.get("parameters", [])
+    schedule = result.get("schedule", None)
+
+    # Generate composite actions for each stage
     for stage in stages:
-        stage_name = stage["name"]
-        commands = stage.get("steps", [])
-        create_composite_action(stage_name, commands)
+        create_composite_action(stage["name"], stage["commands"])
 
-    # Create main GitHub Actions workflow
-    create_github_workflow(
-        stages=stages,
-        workflow_name="converted_workflow",
-        schedule=cron,
-        parameters=parameters
-    )
+    # Create the main GitHub Actions workflow
+    workflow_name = os.path.splitext(os.path.basename(jenkinsfile_path))[0]
+    create_github_workflow(stages, workflow_name, schedule, parameters)
+
+    print(f"✅ Conversion complete for {jenkinsfile_path}\n")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Convert Jenkinsfile to GitHub Actions")
-    parser.add_argument("--dir", required=True, help="Directory containing Jenkinsfile")
-    args = parser.parse_args()
+    # Path to directory containing Jenkinsfiles
+    input_dir = "end-to-end-testing"
 
-    jenkinsfile_path = os.path.join(args.dir, "Jenkinsfile")
-    if not os.path.exists(jenkinsfile_path):
-        print(f"❌ Jenkinsfile not found at: {jenkinsfile_path}")
-    else:
-        process_jenkinsfile(jenkinsfile_path)
+    # Loop through all Jenkinsfiles in the directory
+    for filename in os.listdir(input_dir):
+        if filename.startswith("Jenkinsfile"):
+            jenkinsfile_path = os.path.join(input_dir, filename)
+            process_jenkinsfile(jenkinsfile_path)
