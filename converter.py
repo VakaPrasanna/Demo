@@ -7,6 +7,10 @@ from shared_library_handler import extract_shared_libraries
 def parse_jenkinsfile(jenkinsfile_path):
     with open(jenkinsfile_path, 'r') as file:
         content = file.read()
+        
+    shared_libraries = extract_shared_libraries(content)
+    if shared_libraries:
+        print(f"Detected Shared Libraries: {shared_libraries}")
 
     stages = re.findall(r'stage\(["\'](.*?)["\']\)\s*\{(.*?)\}', content, re.DOTALL)
     steps_dict = {}
