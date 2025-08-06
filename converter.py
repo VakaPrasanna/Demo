@@ -25,15 +25,19 @@ def parse_jenkinsfile(jenkinsfile_path):
             inside_parameters = False
             continue
         elif inside_parameters and line.startswith("string"):
-            parts = line.split("(")[1].split(")")[0]
-            param_dict = {}
-            for kv in parts.split(","):
-                if "=" in kv:
-                    k, v = kv.split("=", 1)
-                    param_dict[k.strip()] = v.strip().strip('"')
+            try:
+                parts = line.split("(",1)[1].rsplit(")",1)[0]
+                param_dict = {}
+                for kv in parts.split(","):
+                    if "=" in kv:
+                        k, v = kv.split("=", 1)
+                        param_dict[k.strip()] = v.strip().strip('"').strip("'")
+                if "name" in param_dict:
+                    parameters.append(param_dict)
                 else:
-                    print(f"[WARNING] Skipping invalid Key-Value pair: {kv}")
-            parameters.append(param_dict)
+                    print(f"[WARNING] Skipping Parameter missing 'name': {param_dict}")
+            except Exception as e:
+                print(f"[WARNING] Failed to parse parameter line: {line}.Error: {e}")
         elif "triggers" in line and "cron" in line:
             if "'" in line:
                 cron_schedule = line.split("cron('")[1].split("')")[0]
