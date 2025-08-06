@@ -1,63 +1,76 @@
 import os
-import re
-from github_actions_manager import create_composite_action, create_workflow_yaml
+import yaml
 from shared_library_handler import extract_shared_libraries
+from github_actions_manager import create_composite_action, create_workflow_yaml
 
-# Util to extract stages and their shell commands from a Jenkinsfile
 def parse_jenkinsfile(jenkinsfile_path):
-    with open(jenkinsfile_path, 'r') as file:
-        content = file.read()
-        
-    shared_libraries = extract_shared_libraries(content)
-    if shared_libraries:
-        print(f"Detected Shared Libraries: {shared_libraries}")
+    with open(jenkinsfile_path, "r") as f:
+        content = f.read()
 
-    stages = re.findall(r'stage\(["\'](.*?)["\']\)\s*\{(.*?)\}', content, re.DOTALL)
-    steps_dict = {}
-    for stage_name, stage_block in stages:
-        steps = re.findall(r'sh\s+["\']{3}(.*?)["\']{3}|sh\s+["\'](.*?)["\']', stage_block, re.DOTALL)
-        commands = []
-        for triple_cmd, single_cmd in steps:
-            cmd = triple_cmd or single_cmd
-            if cmd:
-                commands.extend([line.strip() for line in cmd.strip().split('\n') if line.strip()])
-        steps_dict[stage_name.strip()] = commands
-    return steps_dict
-
-# Extract cron triggers from Jenkinsfile
-def extract_cron_trigger(jenkinsfile_path):
-    with open(jenkinsfile_path, 'r') as file:
-        content = file.read()
-    match = re.search(r'cron\(["\'](.*?)["\']\)', content)
-    return match.group(1) if match else None
-
-# Extract parameter inputs
-def extract_parameters(jenkinsfile_path):
-    with open(jenkinsfile_path, 'r') as file:
-        content = file.read()
     parameters = []
-    choice_matches = re.findall(r'choice\(.*?name:\s*["\'](.*?)["\'].*?choices:\s*\[(.*?)\]', content, re.DOTALL)
-    for name, choices_str in choice_matches:
-        choices = [c.strip(" '") for c in choices_str.strip().split(',') if c.strip()]
-        parameters.append({"name": name, "choices": choices})
-    return parameters
+    stages = []
+    cron_schedule = None
+
+    lines = content.splitlines()
+    inside_parameters = False
+    inside_stages = False
+    current_stage = None
+
+    for line in lines:
+        line = line.strip()
+        if line.startswith("parameters {"):
+            inside_parameters = True
+            continue
+        elif inside_parameters and line == "}":
+            inside_parameters = False
+            continue
+        elif inside_parameters and line.startswith("string"):
+            parts = line.split("(")[1].split(")")[0]
+            param_dict = {}
+            for kv in parts.split(","):
+                k, v = kv.split("=", 1)
+                param_dict[k.strip()] = v.strip().strip('"')
+            parameters.append(param_dict)
+        elif "triggers" in line and "cron" in line:
+            if "'" in line:
+                cron_schedule = line.split("cron('")[1].split("')")[0]
+            elif '"' in line:
+                cron_schedule = line.split('cron("')[1].split('")')[0]
+        elif line.startswith("stages {"):
+            inside_stages = True
+            continue
+        elif inside_stages:
+            if line.startswith("stage("):
+                current_stage = {
+                    "name": line.split("stage(")[1].split(")")[0].strip("'\""),
+                    "steps": []
+                }
+            elif "steps {" in line and current_stage:
+                current_stage["inside_steps"] = True
+            elif "}" in line and current_stage and current_stage.get("inside_steps"):
+                current_stage["inside_steps"] = False
+                stages.append(current_stage)
+                current_stage = None
+            elif current_stage and current_stage.get("inside_steps"):
+                current_stage["steps"].append({"run": line})
+
+    return parameters, stages, cron_schedule
 
 def convert_jenkinsfile_to_github_actions(jenkinsfile_path):
-    print(f"Converting {jenkinsfile_path}...")
-    
-    stages = parse_jenkinsfile(jenkinsfile_path)
-    cron_schedule = extract_cron_trigger(jenkinsfile_path)
-    parameters = extract_parameters(jenkinsfile_path)
+    parameters, stages, cron_schedule = parse_jenkinsfile(jenkinsfile_path)
+    shared_libraries = extract_shared_libraries(jenkinsfile_path)
 
-    workflow_name = os.path.basename(os.path.dirname(jenkinsfile_path)) or "jenkins"
-    job_id = workflow_name.replace('-', '_')
+    workflow_name = os.path.basename(os.path.dirname(jenkinsfile_path)) or "main"
+    composite_action_paths = []
 
-    composite_action_paths = {}
-    for stage, commands in stages.items():
-        action_dir = f".github/actions/{stage.lower().replace(' ', '-')}/"
-        os.makedirs(action_dir, exist_ok=True)
-        create_composite_action(stage, commands, action_dir)
-        composite_action_paths[stage] = action_dir
+    for stage in stages:
+        action_name = stage["name"].replace(" ", "_").lower()
+        create_composite_action(action_name, stage["steps"])
+        composite_action_paths.append(action_name)
 
-    create_workflow_yaml(workflow_name, composite_action_paths, cron_schedule, parameters)
-    print(f"✅ Successfully converted {jenkinsfile_path} to GitHub Actions.")
+    create_workflow_yaml(
+        workflow_name=workflow_name,
+        composite_actions=composite_action_paths,
+        cron_schedule=cron_schedule,
+        parameters=parameters
+    )
