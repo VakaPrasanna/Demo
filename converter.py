@@ -28,8 +28,11 @@ def parse_jenkinsfile(jenkinsfile_path):
             parts = line.split("(")[1].split(")")[0]
             param_dict = {}
             for kv in parts.split(","):
-                k, v = kv.split("=", 1)
-                param_dict[k.strip()] = v.strip().strip('"')
+                if "=" in kv:
+                    k, v = kv.split("=", 1)
+                    param_dict[k.strip()] = v.strip().strip('"')
+                else:
+                    print(f"[WARNING] Skipping invalid Key-Value pair: {kv}")
             parameters.append(param_dict)
         elif "triggers" in line and "cron" in line:
             if "'" in line:
