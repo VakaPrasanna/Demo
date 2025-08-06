@@ -42,7 +42,7 @@ def create_workflow_yaml(workflow_name, composite_actions, cron_schedule=None, p
     if parameters:
         jobs["build"]["steps"].insert(0, {
             "name": "Set Parameters",
-            "run": "\n".join([f"echo {param['name']}=${{{{ github.event.inputs.{param['name']} }}}}" for param in parameters])
+            "run": "\n".join([f"echo {param.get('name', 'UNKNOWN')}=${{{{ github.event.inputs.{param.get('name', 'UNKNOWN')} }}}}" for param in parameters if 'name' in param])
         })
 
     workflow_content = {
