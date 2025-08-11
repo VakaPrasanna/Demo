@@ -6,7 +6,6 @@ from github_actions_manager import create_composite_action, create_workflow_yaml
 def parse_jenkinsfile(jenkinsfile_path):
     with open(jenkinsfile_path, "r") as f:
         content = f.read()
-
     parameters = []
     stages = []
     cron_schedule = None
