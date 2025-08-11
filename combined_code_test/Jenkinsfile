@@ -1,0 +1,106 @@
+pipeline {
+    agent {
+        label 'master'
+    }
+    parameters {
+        string(name: 'PROJECT_NAME', defaultValue: '', description: 'Project Name')
+        string(name: 'PROJECT_DESCRIPTION', defaultValue: '', description: 'Project description')
+        string(name: 'CLOUD_PROVIDER', defaultValue: '', description: 'Cloud Provider')
+    }
+    triggers {
+            cron('1 13 * * 1-5')
+        }
+ 
+    environment {
+        // Define environment variables (e.g., version, repository URL)
+        RELEASE_VERSION = "1.0.${BUILD_NUMBER}"
+        GIT_REPO = 'https://github.com/your/repository.git'
+        ARTIFACTORY_REPO = 'https://your.artifactory.com/repository'
+    }
+ 
+   stages {
+        stage('Non-master'){
+            when {
+                not {
+                    branch 'master'
+                }
+            }
+            steps {
+                // sh 'do-non-master.sh'
+                echo "non-master"
+            }
+        }
+        stage('Development'){
+            when {
+                    branch 'development'
+            }
+            steps {
+                echo "Building for development branch"
+            }
+        }
+           stage('Checkout Code') {
+            steps {
+                git branch: 'main', url: 'https://github.com/AbhishekRaoV/ubiq.git'
+            }
+        }
+        stage('Build') {
+            steps {
+                script {
+                    // Perform the build (example for a Maven-based project)
+                    sh 'mvn clean install'
+                }
+            }
+        }
+        stage('Release') {
+            steps {
+                script {
+                    // Upload the artifact to an artifact repository (e.g., Artifactory, Nexus)
+                    sh "curl -u ${ARTIFACTORY_USER}:${ARTIFACTORY_PASSWORD} -T target/your-artifact-${RELEASE_VERSION}.jar ${ARTIFACTORY_REPO}/your-artifact-${RELEASE_VERSION}.jar"
+ 
+                    // Optionally, create a Git tag for the release
+                       sh "git tag -a v${RELEASE_VERSION} -m 'Release version ${RELEASE_VERSION}'"
+                    sh 'git push origin --tags'
+                }
+            }
+        }
+        stage('Approval') {
+                steps {
+                    input(message: 'Do you approve the deployment?', parameters: [
+                        choice(name: 'APPROVAL_CHOICE', type: 'String', description: 'Select an option', defaultValue: 'yes', choices: ['yes', 'no'])
+                    ])
+                }
+            }
+        stage('Run Commands over SSH') {
+            steps {
+                script {
+                    // Use the sshagent step to load the SSH credentials
+                    sshagent ([SSH_CREDENTIALS_ID]) {
+                        // Now you can run any commands that need SSH access
+                        sh 'ssh -o StrictHostKeyChecking=no user@hostname "your-remote-command"'
+                    }
+                      }
+            }
+        }
+        stage('Sync to S3') {
+            steps {
+                script {
+                    // Sync the generated files to S3
+                    sh """
+                        aws s3 sync ./sync s3://${S3_BUCKET_NAME}/ --delete --region ${REGION}
+                    """
+                }
+            }
+        }
+        stage('Convert to PDF') {
+            steps {
+                script {
+                    // Convert Document.txt to PDF using pandoc
+                    sh 'pandoc doc.txt -o output.pdf --pdf-engine=xelatex'
+ 
+                    // Archive the resulting PDF
+                    archiveArtifacts artifacts: 'output.pdf'
+                }
+            }
+        }
+    }
+}
