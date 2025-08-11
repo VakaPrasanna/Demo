@@ -1,0 +1,18 @@
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: ./.github/actions/non-master
+    - uses: ./.github/actions/development
+    - uses: ./.github/actions/checkout_code
+    - uses: ./.github/actions/build
+    - uses: ./.github/actions/release
+    - uses: ./.github/actions/approval
+    - uses: ./.github/actions/run_commands_over_ssh
+    - uses: ./.github/actions/sync_to_s3
+    - uses: ./.github/actions/convert_to_pdf
+name: combined_code_test
+'on':
+  push:
+    branches:
+    - main
