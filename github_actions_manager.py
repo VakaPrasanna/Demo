@@ -53,6 +53,6 @@ def create_workflow_yaml(workflow_name, composite_actions, cron_schedule=None, p
 
     workflow_path = os.path.join(output_dir, f"{workflow_name}.yml")
     with open(workflow_path, "w") as f:
-        yaml.dump(workflow_content, f, default_flow_style=False)
+        yaml.dump(workflow_content, f, sort_keys=False)
 
     print(f"[INFO] Created workflow file: {workflow_path}")
