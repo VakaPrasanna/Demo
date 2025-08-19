@@ -102,6 +102,7 @@ def normalize_step(line: str):
 
     return {"run": line}
 
+
 def convert_jenkinsfile_to_github_actions(jenkinsfile_path):
     parameters, stages, cron_schedule = parse_jenkinsfile(jenkinsfile_path)
     shared_libraries = extract_shared_libraries(jenkinsfile_path)
