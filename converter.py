@@ -28,8 +28,8 @@ def parse_jenkinsfile(jenkinsfile_path):
                 parts = line.split("(",1)[1].rsplit(")",1)[0]
                 param_dict = {}
                 for kv in parts.split(","):
-                    if "=" in kv:
-                        k, v = kv.split("=", 1)
+                    if ":" in kv:
+                        k, v = kv.split(":", 1)
                         param_dict[k.strip()] = v.strip().strip('"').strip("'")
                 if "name" in param_dict:
                     parameters.append(param_dict)
