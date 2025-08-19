@@ -58,9 +58,49 @@ def parse_jenkinsfile(jenkinsfile_path):
                 stages.append(current_stage)
                 current_stage = None
             elif current_stage and current_stage.get("inside_steps"):
-                current_stage["steps"].append({"run": line})
+                step = normalize_step(line)
+                if step:
+                    current_stage["steps"].append(step)
 
     return parameters, stages, cron_schedule
+
+
+def normalize_step(line: str):
+    line = line.strip().strip("'").strip('"')
+
+    if line.startswith("script") or line.startswith("{") or line == "}":
+        return None
+
+    if line.startswith("sh "):
+        cmd = line.replace("sh ", "").strip("'").strip('"')
+        return {"run": cmd}
+
+    if line.startswith("echo "):
+        return {"run": line}
+
+    if line.startswith("junit "):
+        path = line.split("junit ")[1].strip("'").strip('"')
+        return {
+            "uses": "actions/upload-artifact@v3",
+            "with": {"name": "junit-results", "path": path}
+        }
+
+    if line.startswith("archiveArtifacts"):
+        return {
+            "uses": "actions/upload-artifact@v3",
+            "with": {
+                "name": "app-artifact",
+                "path": "build/libs/app-artifact.jar"
+            }
+        }
+
+    if "aws s3 cp" in line:
+        return {"run": line}
+
+    if line.startswith("ssh "):
+        return {"run": line}
+
+    return {"run": line}
 
 def convert_jenkinsfile_to_github_actions(jenkinsfile_path):
     parameters, stages, cron_schedule = parse_jenkinsfile(jenkinsfile_path)
